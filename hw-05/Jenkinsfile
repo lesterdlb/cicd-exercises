@@ -1,0 +1,62 @@
+pipeline {
+  environment {
+    REPOSITORY = "lesterdlb/react-app"
+    REPOSITORY_CREDENTIALS = 'dockerhub'
+    DOCKER_IMAGE = ''
+    BUILD_NUMBER="${BUILD_NUMBER}"
+  }
+
+  agent any
+ 
+  tools {nodejs "Node"}
+ 
+  stages {
+	stage('Cloning Git') {
+      steps {
+        echo 'git clone https://github.com/lesterdlb/react-app'
+        git 'https://github.com/lesterdlb/react-app'
+      }
+    }
+    stage('Build App') {
+      steps {
+        echo 'npm install'
+        sh 'npm install'
+      }
+    }
+    stage('Test App') {
+      steps {
+        echo 'npm test'
+        sh 'npm test'
+      }
+    }
+    stage('Building Image') {
+      steps{
+        echo "docker build -t $REPOSITORY:$BUILD_NUMBER ."
+        script {
+          DOCKER_IMAGE = docker.build REPOSITORY + ":$BUILD_NUMBER"
+        }
+      }
+    }
+    stage('Push Image') {
+      steps{
+        echo "docker push $REPOSITORY:$BUILD_NUMBER"
+        script {
+          docker.withRegistry( '', REPOSITORY_CREDENTIALS ) {
+            DOCKER_IMAGE.push()
+          }
+        }
+      }
+    }
+    stage('Remove Unused Dooker Image') {
+      steps{
+        sh "docker rmi $REPOSITORY:$BUILD_NUMBER"
+      }
+    }
+    stage('Deploy to Minikube') {
+      steps{
+        echo 'kubectl apply -f k8s-deployment.yml'
+        sh "envsubst < k8s-deployment.yml | kubectl apply -f -"
+      }
+    }
+  }
+}
